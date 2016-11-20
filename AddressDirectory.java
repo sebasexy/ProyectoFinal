@@ -3,15 +3,40 @@ package ProyectoFinal;
 import java.util.Iterator;
 import java.util.LinkedList;
 
+import java.util.ArrayList;
+
 public class AddressDirectory<Name, Address> implements DictionaryInterface<Name, Address> {
+
+
 	/*
 	 * Declaración de variables de la clase AddressDirectory
 	 */
 	private int size,	//tamaño actual de la lista (# de elementos)
-				capacity;	// capacidad total de la lista
+	capacity;	// capacidad total de la lista
 	protected final static int DEFAULT_SIZE = 50;	//tamaño default para la creación de la lista (tamaño = 50)
+	private float loadFactor;
+	private int threshold;
+	protected final static float DEFAULT_LOAD = 0.75f;
 	private Node<Name, Address>[] addressDirectoryTable;	//arreglo de Nodos para los Nombres y Direcciones con Key: nombre, Value: addres
-	
+	private NameIterator[] names;
+	private AddressIterator[] addresses;
+	/*
+	public static void main(String[] args) {
+		AddressDirectory<String, String> database = new AddressDirectory<>();
+		System.out.println(database.isEmpty());
+
+		database.add("Pablo", "CasaPablo");
+		database.add("Sebastian", "CasaSebastian");
+		database.add("Luis", "CasaLuis");
+		System.out.println();
+		System.out.println(database.threshold);
+		System.out.println();
+
+		database.add("Yorch", "CasaYorch");
+		
+	}
+	*/
+
 	/**
 	 * rehash() - hace un rehash para extender la lista al doble de la capacidad +1
 	 */
@@ -24,34 +49,36 @@ public class AddressDirectory<Name, Address> implements DictionaryInterface<Name
 		}
 		addressDirectoryTable = temp;
 	}
-	
 	/**
 	 * AddressDirectory() - Constructor por default
 	 */	
 	public AddressDirectory(){
-		this.size = 0;
-		this.capacity = DEFAULT_SIZE;
-		this.addressDirectoryTable = new Node[capacity];
+		this(DEFAULT_SIZE, DEFAULT_LOAD);
 	}
 
 	/**
-	 * AddressDirectory() - Constructor con parámetro de capacidad
+	 * AddressDirectory() - Constructor con parámetro de capacidad y factor de carga
 	 * @param capacity
 	 */
-	public AddressDirectory(int capacity){
+	public AddressDirectory(int capacity, float loadFactor){
+		if(loadFactor > 1 || loadFactor <= 0){
+			throw new IllegalArgumentException("Please insert a loadFactor >0 and <= 1");
+		}
 		this.size = 0;
 		this.capacity = capacity;
+		this.loadFactor = loadFactor;
 		this.addressDirectoryTable = new Node[capacity];
+		this.threshold = (int) (capacity * loadFactor);
 	}
 	/**
 	 * add(name, address) - agrega a la lista el nombre y la dirección pasados en el parámetro
 	 */
 	public Address add(Name name, Address address) {
 		int position = hash(name);
-		for(Node<Name, Address> n = addressDirectoryTable[position]; n != null; n = n.next){
-			if(n.name.equals(name)){
-				Address saved = n.address;
-				n.address = address;
+		for(Node<Name, Address> node = addressDirectoryTable[position]; node != null; node = node.next){
+			if(node.name.equals(name)){
+				Address saved = node.address;
+				node.address = address;
 				return saved;
 			}
 		}
@@ -65,8 +92,26 @@ public class AddressDirectory<Name, Address> implements DictionaryInterface<Name
 	 * remove(name) - si existe el nombre en la lista, lo remueve, de lo contrario no hace nada 
 	 */
 	public Address remove(Name name) {
-		// TODO Auto-generated method stub
+		if(name == null){
+			throw new NullPointerException();
+		}
+		Node<Name, Address> values = addressDirectoryTable[hash(name)];
+		if(values.name.equals(name)){
+			Address address = values.address;
+			addressDirectoryTable[hash(name)] = values.next;
+			size--;
+			return address;			
+		}
+		while (values.next != null){
+			if(values.next.name.equals(name)){
+				Address address = values.next.address;
+				values.next = values.next.next;
+				size--;
+				return address;
+			}
+		}
 		return null;
+
 	}
 
 	/**
@@ -107,7 +152,7 @@ public class AddressDirectory<Name, Address> implements DictionaryInterface<Name
 	 * isEmpty() - regresa booleano de si la lista está vacía
 	 */
 	public boolean isEmpty() {
-		return (this.capacity==0);
+		return (this.size==0);
 	}
 
 	/**
@@ -125,14 +170,25 @@ public class AddressDirectory<Name, Address> implements DictionaryInterface<Name
 		this.addressDirectoryTable = temp;
 		this.size = 0;		
 	}
-	
+
 	/**
 	 * resize() - extiende la capacidad al doble cuando alpha > 0.75
 	 */
 	public void resize(){
-		
+		Node<Name, Address>[] oldAddressDirectoryTable = new Node[capacity];
+		System.arraycopy(this.addressDirectoryTable, 0, oldAddressDirectoryTable, 0, capacity);
+		this.addressDirectoryTable = new Node[capacity*2];
+		this.capacity = this.capacity*2;
+		this.size = 0;
+		this.threshold = (int) (capacity * loadFactor);
+		for(Node<Name, Address> values : oldAddressDirectoryTable){
+			for(; values != null; values = values.next){
+				add(values.name, values.address);
+			}
+		}
+		oldAddressDirectoryTable = null; //delete old table, hello garbage collector		
 	}
-	
+
 	/**
 	 * hash - hashes a key into an int
 	 * @param name
@@ -141,7 +197,7 @@ public class AddressDirectory<Name, Address> implements DictionaryInterface<Name
 	private int hash(Name name){
 		return (name.hashCode() & 0x7FFFFFFF)%capacity;
 	}
-	
+
 	/*
 	 * AddressIterator - crea iterador para las direcciones
 	 */
@@ -150,12 +206,12 @@ public class AddressDirectory<Name, Address> implements DictionaryInterface<Name
 			return  nextNode().address;
 		}		
 	}
-	
+
 	/*
 	 * NameIterator - crea iterador para los nombres
 	 */
 	private class NameIterator extends HashIterator<Name>{
-		
+
 		public Name next(){
 			return nextNode().name;
 		}
@@ -170,7 +226,7 @@ public class AddressDirectory<Name, Address> implements DictionaryInterface<Name
 		Name name;
 		Address address;
 		Node<Name, Address> next;
-		
+
 		/**
 		 * Node()- asigna las variables a null
 		 */
@@ -201,7 +257,7 @@ public class AddressDirectory<Name, Address> implements DictionaryInterface<Name
 			this.next = next;
 		}
 	}
-	
+
 	/*
 	 * Clase HashIterator, es el Iterador
 	 */
